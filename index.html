@@ -29,9 +29,9 @@
 
         // 先只要求 Files.Read
         const loginRequest = {
-            scopes: [
-                "User.Read",
-                "Files.Read"
+    scopes: [
+        "User.Read",
+        "Files.ReadWrite"
             ]
         };
 
@@ -120,11 +120,11 @@
         async function getAccessToken(account) {
 
             const request = {
-                scopes: [
-                    "User.Read",
-                    "Files.Read"
-                ],
-                account: account
+    scopes: [
+        "User.Read",
+        "Files.Read"
+    ],
+    account: account
             };
 
             try {
