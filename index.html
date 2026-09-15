@@ -25,11 +25,11 @@
         const msalInstance = new PublicClientApplication(msalConfig);
 
         const loginRequest = {
-            scopes: [
-                "User.Read",
-                "Files.Read"
-            ]
-        };
+    scopes: [
+        "User.Read",
+        "Files.Read.All"
+    ]
+};
 
         async function initialize() {
             try {
