@@ -10,6 +10,8 @@
 
     <h1>ULT 應收帳款 Dashboard</h1>
 
+    <h2>應收帳款總額：NT$ <span id="totalAR">0</span></h2>
+
     <h2>應收帳款明細</h2>
 
     <table border="1" cellpadding="10">
@@ -35,9 +37,13 @@
 
                 const rows = data.trim().split("\n");
 
+                let totalAR = 0;
+
                 rows.slice(1).forEach(row => {
 
                     const columns = row.split(",");
+
+                    totalAR += Number(columns[3]);
 
                     const tr = document.createElement("tr");
 
@@ -51,7 +57,8 @@
 
                     });
 
-                    document.getElementById("arTable").appendChild(tr);
+                    document.getElementById("totalAR").textContent =
+    totalAR.toLocaleString();
 
                 });
 
