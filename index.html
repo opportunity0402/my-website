@@ -5,404 +5,131 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ULT AR Dashboard</title>
-
-    <script type="module">
-        import {
-            PublicClientApplication
-        } from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@4.25.0/+esm";
-
-        // ==============================
-        // Microsoft Entra 設定
-        // ==============================
-        const msalConfig = {
-            auth: {
-                clientId: "2044b34d-062f-45c4-baa9-6ce31d947bc4",
-                authority: "https://login.microsoftonline.com/b85a360e-e116-4ef7-95e9-29d00f48e352",
-                redirectUri: "https://opportunity0402.github.io/my-website/redirect.html"
-            },
-            cache: {
-                cacheLocation: "sessionStorage"
-            }
-        };
-
-        const msalInstance = new PublicClientApplication(msalConfig);
-
-        // 先只要求 Files.Read
-        const loginRequest = {
-    scopes: [
-        "User.Read",
-        "Files.ReadWrite"
-            ]
-        };
-
-        // ==============================
-        // 你的 SharePoint 分享連結
-        // ==============================
-        const shareUrl =
-            "https://ultesttechcom.sharepoint.com/:x:/s/ULT_All/IQAOATO3Q7dKQaZpR0XhBD38AWfZEL6OHxVe2rQdkcLSvZc?e=GiQs4r";
-
-
-        // ==============================
-        // 初始化
-        // ==============================
-        async function initialize() {
-
-            try {
-
-                await msalInstance.initialize();
-
-                document.getElementById("loginButton").disabled = false;
-
-                document
-                    .getElementById("loginButton")
-                    .addEventListener("click", login);
-
-                document.getElementById("status").textContent =
-                    "Microsoft 登入系統已準備完成";
-
-            } catch (error) {
-
-                console.error(error);
-
-                document.getElementById("status").textContent =
-                    "MSAL 初始化失敗：" + error.message;
-            }
-        }
-
-
-        // ==============================
-        // 登入
-        // ==============================
-        async function login() {
-
-            try {
-
-                document.getElementById("status").textContent =
-                    "正在登入 Microsoft 365...";
-
-                const response =
-                    await msalInstance.loginPopup(loginRequest);
-
-                const account = response.account;
-
-                msalInstance.setActiveAccount(account);
-
-                document.getElementById("status").textContent =
-                    "Microsoft 365 登入成功";
-
-                document.getElementById("userInfo").innerHTML =
-                    "登入帳號：<strong>" +
-                    account.username +
-                    "</strong>";
-
-                document.getElementById("loginButton").style.display =
-                    "none";
-
-                document.getElementById("fileStatus").textContent =
-                    "正在透過 SharePoint 分享連結尋找 Excel...";
-
-                await getSharedFile(account);
-
-            } catch (error) {
-
-                console.error(error);
-
-                document.getElementById("status").textContent =
-                    "登入失敗：" +
-                    (error.errorCode || error.message);
-            }
-        }
-
-
-        // ==============================
-        // 取得 Access Token
-        // ==============================
-        async function getAccessToken(account) {
-
-            const request = {
-    scopes: [
-        "User.Read",
-        "Files.Read"
-    ],
-    account: account
-            };
-
-            try {
-
-                const response =
-                    await msalInstance.acquireTokenSilent(request);
-
-                return response.accessToken;
-
-            } catch (error) {
-
-                console.log(
-                    "Silent token failed, using popup",
-                    error
-                );
-
-                const response =
-                    await msalInstance.acquireTokenPopup(request);
-
-                return response.accessToken;
-            }
-        }
-
-
-        // ==============================
-        // SharePoint URL
-        // 轉成 Graph shareId
-        // ==============================
-        function encodeSharingUrl(url) {
-
-            const bytes =
-                new TextEncoder().encode(url);
-
-            let binary = "";
-
-            bytes.forEach(byte => {
-                binary += String.fromCharCode(byte);
-            });
-
-            const base64 =
-                btoa(binary);
-
-            return "u!" +
-                base64
-                    .replace(/=/g, "")
-                    .replace(/\//g, "_")
-                    .replace(/\+/g, "-");
-        }
-
-
-        // ==============================
-        // 用分享網址取得 Excel
-        // ==============================
-        async function getSharedFile(account) {
-
-            try {
-
-                const token =
-                    await getAccessToken(account);
-
-                const shareId =
-                    encodeSharingUrl(shareUrl);
-
-                console.log(
-                    "Graph shareId:",
-                    shareId
-                );
-
-                const graphUrl =
-                    "https://graph.microsoft.com/v1.0/shares/" +
-                    shareId +
-                    "/driveItem";
-
-
-                const response = await fetch(
-                    graphUrl,
-                    {
-                        headers: {
-                            Authorization:
-                                "Bearer " + token
-                        }
-                    }
-                );
-
-
-                const responseText =
-                    await response.text();
-
-
-                if (!response.ok) {
-
-                    throw new Error(
-                        "Graph API 回傳 " +
-                        response.status +
-                        "：" +
-                        responseText
-                    );
-                }
-
-
-                const file =
-                    JSON.parse(responseText);
-
-
-                console.log(
-                    "SharePoint Excel:",
-                    file
-                );
-
-
-                document.getElementById("fileStatus").innerHTML =
-                    "✅ SharePoint Excel 連線成功";
-
-
-                document.getElementById("fileInfo").innerHTML =
-                    "<strong>找到 AR Excel！</strong>" +
-                    "<br><br>" +
-
-                    "檔案名稱：<strong>" +
-                    file.name +
-                    "</strong><br>" +
-
-                    "檔案大小：" +
-                    (file.size / 1024 / 1024).toFixed(2) +
-                    " MB<br>" +
-
-                    "最後修改：" +
-                    new Date(
-                        file.lastModifiedDateTime
-                    ).toLocaleString() +
-                    "<br><br>" +
-
-                    "Drive Item ID：<br>" +
-                    "<code>" +
-                    file.id +
-                    "</code>";
-
-            } catch (error) {
-
-                console.error(error);
-
-                document.getElementById("fileStatus").innerHTML =
-                    "❌ SharePoint Excel 連線失敗";
-
-                document.getElementById("fileInfo").textContent =
-                    error.message;
-            }
-        }
-
-
-        initialize();
-
-    </script>
-
+    <!-- 引入 Chart.js 方便未來直接畫圖表 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
-
         body {
-            font-family:
-                Arial,
-                "Microsoft JhengHei",
-                sans-serif;
-
+            font-family: Arial, "Microsoft JhengHei", sans-serif;
             max-width: 1100px;
-
             margin: 40px auto;
-
             padding: 0 20px;
+            background-color: #f4f7f6;
+            color: #333;
         }
 
-
-        button {
-
-            background: #0078d4;
-
-            color: white;
-
-            border: 0;
-
-            padding: 12px 22px;
-
-            font-size: 16px;
-
-            border-radius: 5px;
-
-            cursor: pointer;
+        h1 {
+            color: #0078d4;
+            text-align: center;
+            margin-bottom: 30px;
         }
-
-
-        button:disabled {
-
-            background: #999;
-
-            cursor: wait;
-        }
-
 
         #status {
-
-            margin-top: 20px;
-
+            text-align: center;
             font-weight: bold;
+            margin-bottom: 20px;
+            font-size: 16px;
+            color: #666;
         }
 
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
 
-        #userInfo {
-
+        table {
+            width: 100%;
+            border-collapse: collapse;
             margin-top: 10px;
         }
 
-
-        #sharepointBox {
-
-            margin-top: 30px;
-
-            padding: 20px;
-
-            border: 1px solid #ddd;
-
-            border-radius: 8px;
-
-            background: #f7f7f7;
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
         }
 
-
-        #fileStatus {
-
-            font-size: 18px;
-
-            font-weight: bold;
+        th {
+            background-color: #0078d4;
+            color: white;
         }
 
-
-        #fileInfo {
-
-            margin-top: 15px;
-
-            line-height: 1.7;
-
-            word-break: break-all;
+        tr:hover {
+            background-color: #f1f1f1;
         }
-
     </style>
-
 </head>
-
 
 <body>
 
     <h1>ULT 應收帳款 Dashboard</h1>
+    
+    <div id="status">正在載入最新應收帳款資料...</div>
 
-    <p>
-        請使用優立測 Microsoft 365 帳號登入。
-    </p>
-
-
-    <button id="loginButton" disabled>
-        Microsoft 365 登入
-    </button>
-
-
-    <div id="status">
-        正在初始化 Microsoft 登入...
+    <div class="card">
+        <h3>目前應收帳款列表</h3>
+        <table id="arTable">
+            <thead>
+                <tr>
+                    <th>客戶名稱</th>
+                    <th>發票號碼</th>
+                    <th>發票日期</th>
+                    <th>應收餘額</th>
+                    <th>預計收款日</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 資料會自動填入這裡 -->
+            </tbody>
+        </table>
     </div>
 
+    <script>
+        // ==========================================
+        // 請將下方網址替換為你剛才透過 Power Automate
+        // 產生的 ar-data.json 公開下載連結 (或 API 連結)
+        // ==========================================
+        const jsonUrl = "你的_ar-data.json_公開下載網址";
 
-    <div id="userInfo"></div>
+        async-function loadARData() {
+            try {
+                const response = await fetch(jsonUrl);
+                if (!response.ok) {
+                    throw new Error('無法取得 AR 資料檔案 (HTTP 狀態碼: ' + response.status + ')');
+                }
+                
+                const data = await response.json();
+                console.log("成功取得 AR 資料：", data);
 
+                document.getElementById("status").textContent = "✅ 資料已成功同步更新";
 
-    <div id="sharepointBox">
+                const tbody = document.querySelector("#arTable tbody");
+                tbody.innerHTML = ""; // 清空舊資料
 
-        <div id="fileStatus">
-            尚未連線 SharePoint
-        </div>
+                // 將每一筆資料塞入表格
+                data.forEach(item => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${item['客戶名稱'] || ''}</td>
+                        <td>${item['發票號碼'] || ''}</td>
+                        <td>${item['發票日期'] || ''}</td>
+                        <td>${Number(item['應收餘額'] || 0).toLocaleString()}</td>
+                        <td>${item['預計收款日'] || ''}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
 
-        <div id="fileInfo"></div>
+            } catch (error) {
+                console.error(error);
+                document.getElementById("status").textContent = "❌ 載入失敗：" + error.message;
+            }
+        }
 
-    </div>
+        loadARData();
+    </script>
 
 </body>
 
