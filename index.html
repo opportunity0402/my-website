@@ -3,33 +3,60 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>我的第一個網站</title>
+    <title>ULT AR Dashboard</title>
 </head>
 
 <body>
 
-    <h1>歡迎來到我的網站</h1>
+    <h1>ULT 應收帳款 Dashboard</h1>
 
-    <img src="gumgum.jpg" width="500">
+    <h2>應收帳款明細</h2>
 
-    <p id="message"></p>
+    <table border="1" cellpadding="10">
+        <thead>
+            <tr>
+                <th>客戶名稱</th>
+                <th>發票號碼</th>
+                <th>發票日期</th>
+                <th>應收餘額</th>
+                <th>預計收款日</th>
+            </tr>
+        </thead>
+
+        <tbody id="arTable">
+        </tbody>
+    </table>
 
     <script>
-        function updateTime() {
-            const now = new Date();
 
-            const time = now.toLocaleTimeString("zh-TW", {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false
+        fetch("AR TEST.csv")
+            .then(response => response.text())
+            .then(data => {
+
+                const rows = data.trim().split("\n");
+
+                rows.slice(1).forEach(row => {
+
+                    const columns = row.split(",");
+
+                    const tr = document.createElement("tr");
+
+                    columns.forEach(column => {
+
+                        const td = document.createElement("td");
+
+                        td.textContent = column;
+
+                        tr.appendChild(td);
+
+                    });
+
+                    document.getElementById("arTable").appendChild(tr);
+
+                });
+
             });
 
-            document.getElementById("message").innerText =
-                "此時此刻是 " + time + "，我正在學習怎麼做網站。";
-        }
-
-        updateTime();
-        setInterval(updateTime, 1000);
     </script>
 
 </body>
