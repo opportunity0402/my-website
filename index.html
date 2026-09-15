@@ -24,6 +24,13 @@
 
         const msalInstance = new PublicClientApplication(msalConfig);
 
+        const loginRequest = {
+            scopes: [
+                "User.Read",
+                "Files.Read"
+            ]
+        };
+
         async function initialize() {
             try {
                 await msalInstance.initialize();
@@ -37,19 +44,14 @@
 
             } catch (error) {
                 console.error(error);
+
                 document.getElementById("status").textContent =
                     "MSAL 初始化失敗：" + error.message;
             }
         }
 
-        async function login() {
 
-            const loginRequest = {
-                scopes: [
-                    "User.Read",
-                    "Files.Read"
-                ]
-            };
+        async function login() {
 
             try {
 
@@ -60,6 +62,8 @@
                     await msalInstance.loginPopup(loginRequest);
 
                 const account = response.account;
+
+                msalInstance.setActiveAccount(account);
 
                 document.getElementById("status").textContent =
                     "Microsoft 365 登入成功";
@@ -72,6 +76,11 @@
                 document.getElementById("loginButton").style.display =
                     "none";
 
+                document.getElementById("fileStatus").textContent =
+                    "正在尋找 ULT AR Excel...";
+
+                await findARFile(account);
+
             } catch (error) {
 
                 console.error(error);
@@ -81,10 +90,196 @@
             }
         }
 
+
+        async function getAccessToken(account) {
+
+            const request = {
+                scopes: [
+                    "User.Read",
+                    "Files.Read"
+                ],
+                account: account
+            };
+
+            try {
+
+                const response =
+                    await msalInstance.acquireTokenSilent(request);
+
+                return response.accessToken;
+
+            } catch (error) {
+
+                console.log(
+                    "Silent token failed, using popup",
+                    error
+                );
+
+                const response =
+                    await msalInstance.acquireTokenPopup(request);
+
+                return response.accessToken;
+            }
+        }
+
+
+        async function findARFile(account) {
+
+            try {
+
+                const token =
+                    await getAccessToken(account);
+
+                /*
+                    SharePoint 網址：
+
+                    https://ultesttechcom.sharepoint.com
+                    /sites/ULT_All
+                */
+
+                const siteResponse = await fetch(
+                    "https://graph.microsoft.com/v1.0/sites/ultesttechcom.sharepoint.com:/sites/ULT_All",
+                    {
+                        headers: {
+                            Authorization: "Bearer " + token
+                        }
+                    }
+                );
+
+                if (!siteResponse.ok) {
+                    throw new Error(
+                        "取得 SharePoint Site 失敗：" +
+                        siteResponse.status +
+                        " " +
+                        await siteResponse.text()
+                    );
+                }
+
+                const site =
+                    await siteResponse.json();
+
+                console.log(
+                    "SharePoint Site:",
+                    site
+                );
+
+
+                /*
+                    找到 ULT_All 的 Documents 文件庫
+                */
+
+                const driveResponse = await fetch(
+                    "https://graph.microsoft.com/v1.0/sites/" +
+                    site.id +
+                    "/drive",
+                    {
+                        headers: {
+                            Authorization: "Bearer " + token
+                        }
+                    }
+                );
+
+                if (!driveResponse.ok) {
+                    throw new Error(
+                        "取得 SharePoint 文件庫失敗：" +
+                        driveResponse.status +
+                        " " +
+                        await driveResponse.text()
+                    );
+                }
+
+                const drive =
+                    await driveResponse.json();
+
+                console.log(
+                    "SharePoint Drive:",
+                    drive
+                );
+
+
+                /*
+                    正式 ULT AR Excel 路徑
+                */
+
+                const filePath =
+                    "/OPS/Special Case/ULT_Part time/Fin related/" +
+                    "開立發票申請/" +
+                    "2025_ULT開立發票明細(new).xlsx";
+
+
+                const fileURL =
+                    "https://graph.microsoft.com/v1.0/drives/" +
+                    drive.id +
+                    "/root:" +
+                    filePath;
+
+
+                const fileResponse = await fetch(
+                    fileURL,
+                    {
+                        headers: {
+                            Authorization: "Bearer " + token
+                        }
+                    }
+                );
+
+
+                if (!fileResponse.ok) {
+
+                    throw new Error(
+                        "找不到 AR Excel：" +
+                        fileResponse.status +
+                        " " +
+                        await fileResponse.text()
+                    );
+                }
+
+
+                const file =
+                    await fileResponse.json();
+
+
+                console.log(
+                    "AR Excel:",
+                    file
+                );
+
+
+                document.getElementById("fileStatus").innerHTML =
+                    "✅ 已成功連線 SharePoint";
+
+
+                document.getElementById("fileInfo").innerHTML =
+                    "<strong>找到 AR Excel！</strong><br><br>" +
+                    "檔案名稱：" +
+                    file.name +
+                    "<br>" +
+                    "檔案大小：" +
+                    (file.size / 1024 / 1024).toFixed(2) +
+                    " MB<br>" +
+                    "最後修改：" +
+                    new Date(file.lastModifiedDateTime).toLocaleString();
+
+            } catch (error) {
+
+                console.error(error);
+
+                document.getElementById("fileStatus").innerHTML =
+                    "❌ SharePoint 連線失敗";
+
+                document.getElementById("fileInfo").textContent =
+                    error.message;
+            }
+        }
+
+
         initialize();
+
     </script>
 
+
     <style>
+
         body {
             font-family: Arial, "Microsoft JhengHei", sans-serif;
             max-width: 1100px;
@@ -115,9 +310,29 @@
         #userInfo {
             margin-top: 10px;
         }
+
+        #sharepointBox {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f7f7f7;
+        }
+
+        #fileStatus {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        #fileInfo {
+            margin-top: 15px;
+            line-height: 1.6;
+        }
+
     </style>
 
 </head>
+
 
 <body>
 
@@ -127,15 +342,29 @@
         請使用優立測 Microsoft 365 帳號登入。
     </p>
 
+
     <button id="loginButton" disabled>
         Microsoft 365 登入
     </button>
+
 
     <div id="status">
         正在初始化 Microsoft 登入...
     </div>
 
+
     <div id="userInfo"></div>
+
+
+    <div id="sharepointBox">
+
+        <div id="fileStatus">
+            尚未連線 SharePoint
+        </div>
+
+        <div id="fileInfo"></div>
+
+    </div>
 
 </body>
 
