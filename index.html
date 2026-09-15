@@ -3,70 +3,139 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ULT AR Dashboard</title>
+
+    <script type="module">
+        import {
+            PublicClientApplication
+        } from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@4.25.0/+esm";
+
+        const msalConfig = {
+            auth: {
+                clientId: "2044b34d-062f-45c4-baa9-6ce31d947bc4",
+                authority: "https://login.microsoftonline.com/b85a360e-e116-4ef7-95e9-29d00f48e352",
+                redirectUri: "https://opportunity0402.github.io/my-website/redirect.html"
+            },
+            cache: {
+                cacheLocation: "sessionStorage"
+            }
+        };
+
+        const msalInstance = new PublicClientApplication(msalConfig);
+
+        async function initialize() {
+            try {
+                await msalInstance.initialize();
+
+                document.getElementById("loginButton").disabled = false;
+
+                document.getElementById("loginButton").addEventListener(
+                    "click",
+                    login
+                );
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById("status").textContent =
+                    "MSAL 初始化失敗：" + error.message;
+            }
+        }
+
+        async function login() {
+
+            const loginRequest = {
+                scopes: [
+                    "User.Read",
+                    "Files.Read.All"
+                ]
+            };
+
+            try {
+
+                document.getElementById("status").textContent =
+                    "正在登入 Microsoft 365...";
+
+                const response =
+                    await msalInstance.loginPopup(loginRequest);
+
+                const account = response.account;
+
+                document.getElementById("status").textContent =
+                    "Microsoft 365 登入成功";
+
+                document.getElementById("userInfo").innerHTML =
+                    "登入帳號：<strong>" +
+                    account.username +
+                    "</strong>";
+
+                document.getElementById("loginButton").style.display =
+                    "none";
+
+            } catch (error) {
+
+                console.error(error);
+
+                document.getElementById("status").textContent =
+                    "登入失敗：" + error.message;
+            }
+        }
+
+        initialize();
+    </script>
+
+    <style>
+        body {
+            font-family: Arial, "Microsoft JhengHei", sans-serif;
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        button {
+            background: #0078d4;
+            color: white;
+            border: 0;
+            padding: 12px 22px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #999;
+            cursor: wait;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+        #userInfo {
+            margin-top: 10px;
+        }
+    </style>
+
 </head>
 
 <body>
 
     <h1>ULT 應收帳款 Dashboard</h1>
 
-    <h2>應收帳款總額：NT$ <span id="totalAR">0</span></h2>
+    <p>
+        請使用優立測 Microsoft 365 帳號登入。
+    </p>
 
-    <h2>應收帳款明細</h2>
+    <button id="loginButton" disabled>
+        Microsoft 365 登入
+    </button>
 
-    <table border="1" cellpadding="10">
-        <thead>
-            <tr>
-                <th>客戶名稱</th>
-                <th>發票號碼</th>
-                <th>發票日期</th>
-                <th>應收餘額</th>
-                <th>預計收款日</th>
-            </tr>
-        </thead>
+    <div id="status">
+        正在初始化 Microsoft 登入...
+    </div>
 
-        <tbody id="arTable">
-        </tbody>
-    </table>
-
-    <script>
-
-        fetch("AR TEST.csv")
-            .then(response => response.text())
-            .then(data => {
-
-                const rows = data.trim().split("\n");
-
-                let totalAR = 0;
-
-                rows.slice(1).forEach(row => {
-
-                    const columns = row.split(",");
-
-                    totalAR += Number(columns[3]);
-
-                    const tr = document.createElement("tr");
-
-                    columns.forEach(column => {
-
-                        const td = document.createElement("td");
-
-                        td.textContent = column;
-
-                        tr.appendChild(td);
-
-                    });
-
-                    document.getElementById("arTable").appendChild(tr);
-
-                    document.getElementById("totalAR").textContent =
-    totalAR.toLocaleString();
-
-                });
-
-            });
-
-    </script>
+    <div id="userInfo"></div>
 
 </body>
 
