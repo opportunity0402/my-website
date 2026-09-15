@@ -11,6 +11,9 @@
             PublicClientApplication
         } from "https://cdn.jsdelivr.net/npm/@azure/msal-browser@4.25.0/+esm";
 
+        // ==============================
+        // Microsoft Entra 設定
+        // ==============================
         const msalConfig = {
             auth: {
                 clientId: "2044b34d-062f-45c4-baa9-6ce31d947bc4",
@@ -24,25 +27,41 @@
 
         const msalInstance = new PublicClientApplication(msalConfig);
 
+        // 先只要求 Files.Read
         const loginRequest = {
-    scopes: [
-        "User.Read",
-        "Files.Read.All"
-    ]
-};
+            scopes: [
+                "User.Read",
+                "Files.Read"
+            ]
+        };
 
+        // ==============================
+        // 你的 SharePoint 分享連結
+        // ==============================
+        const shareUrl =
+            "https://ultesttechcom.sharepoint.com/:x:/s/ULT_All/IQAOATO3Q7dKQaZpR0XhBD38AWfZEL6OHxVe2rQdkcLSvZc?e=GiQs4r";
+
+
+        // ==============================
+        // 初始化
+        // ==============================
         async function initialize() {
+
             try {
+
                 await msalInstance.initialize();
 
                 document.getElementById("loginButton").disabled = false;
 
-                document.getElementById("loginButton").addEventListener(
-                    "click",
-                    login
-                );
+                document
+                    .getElementById("loginButton")
+                    .addEventListener("click", login);
+
+                document.getElementById("status").textContent =
+                    "Microsoft 登入系統已準備完成";
 
             } catch (error) {
+
                 console.error(error);
 
                 document.getElementById("status").textContent =
@@ -51,6 +70,9 @@
         }
 
 
+        // ==============================
+        // 登入
+        // ==============================
         async function login() {
 
             try {
@@ -77,20 +99,24 @@
                     "none";
 
                 document.getElementById("fileStatus").textContent =
-                    "正在尋找 ULT AR Excel...";
+                    "正在透過 SharePoint 分享連結尋找 Excel...";
 
-                await findARFile(account);
+                await getSharedFile(account);
 
             } catch (error) {
 
                 console.error(error);
 
                 document.getElementById("status").textContent =
-                    "登入失敗：" + error.message;
+                    "登入失敗：" +
+                    (error.errorCode || error.message);
             }
         }
 
 
+        // ==============================
+        // 取得 Access Token
+        // ==============================
         async function getAccessToken(account) {
 
             const request = {
@@ -123,149 +149,125 @@
         }
 
 
-        async function findARFile(account) {
+        // ==============================
+        // SharePoint URL
+        // 轉成 Graph shareId
+        // ==============================
+        function encodeSharingUrl(url) {
+
+            const bytes =
+                new TextEncoder().encode(url);
+
+            let binary = "";
+
+            bytes.forEach(byte => {
+                binary += String.fromCharCode(byte);
+            });
+
+            const base64 =
+                btoa(binary);
+
+            return "u!" +
+                base64
+                    .replace(/=/g, "")
+                    .replace(/\//g, "_")
+                    .replace(/\+/g, "-");
+        }
+
+
+        // ==============================
+        // 用分享網址取得 Excel
+        // ==============================
+        async function getSharedFile(account) {
 
             try {
 
                 const token =
                     await getAccessToken(account);
 
-                /*
-                    SharePoint 網址：
-
-                    https://ultesttechcom.sharepoint.com
-                    /sites/ULT_All
-                */
-
-                const siteResponse = await fetch(
-                    "https://graph.microsoft.com/v1.0/sites/ultesttechcom.sharepoint.com:/sites/ULT_All",
-                    {
-                        headers: {
-                            Authorization: "Bearer " + token
-                        }
-                    }
-                );
-
-                if (!siteResponse.ok) {
-                    throw new Error(
-                        "取得 SharePoint Site 失敗：" +
-                        siteResponse.status +
-                        " " +
-                        await siteResponse.text()
-                    );
-                }
-
-                const site =
-                    await siteResponse.json();
+                const shareId =
+                    encodeSharingUrl(shareUrl);
 
                 console.log(
-                    "SharePoint Site:",
-                    site
+                    "Graph shareId:",
+                    shareId
                 );
 
+                const graphUrl =
+                    "https://graph.microsoft.com/v1.0/shares/" +
+                    shareId +
+                    "/driveItem";
 
-                /*
-                    找到 ULT_All 的 Documents 文件庫
-                */
 
-                const driveResponse = await fetch(
-                    "https://graph.microsoft.com/v1.0/sites/" +
-                    site.id +
-                    "/drive",
+                const response = await fetch(
+                    graphUrl,
                     {
                         headers: {
-                            Authorization: "Bearer " + token
-                        }
-                    }
-                );
-
-                if (!driveResponse.ok) {
-                    throw new Error(
-                        "取得 SharePoint 文件庫失敗：" +
-                        driveResponse.status +
-                        " " +
-                        await driveResponse.text()
-                    );
-                }
-
-                const drive =
-                    await driveResponse.json();
-
-                console.log(
-                    "SharePoint Drive:",
-                    drive
-                );
-
-
-                /*
-                    正式 ULT AR Excel 路徑
-                */
-
-                const filePath =
-                    "/OPS/Special Case/ULT_Part time/Fin related/" +
-                    "開立發票申請/" +
-                    "2025_ULT開立發票明細(new).xlsx";
-
-
-                const fileURL =
-                    "https://graph.microsoft.com/v1.0/drives/" +
-                    drive.id +
-                    "/root:" +
-                    filePath;
-
-
-                const fileResponse = await fetch(
-                    fileURL,
-                    {
-                        headers: {
-                            Authorization: "Bearer " + token
+                            Authorization:
+                                "Bearer " + token
                         }
                     }
                 );
 
 
-                if (!fileResponse.ok) {
+                const responseText =
+                    await response.text();
+
+
+                if (!response.ok) {
 
                     throw new Error(
-                        "找不到 AR Excel：" +
-                        fileResponse.status +
-                        " " +
-                        await fileResponse.text()
+                        "Graph API 回傳 " +
+                        response.status +
+                        "：" +
+                        responseText
                     );
                 }
 
 
                 const file =
-                    await fileResponse.json();
+                    JSON.parse(responseText);
 
 
                 console.log(
-                    "AR Excel:",
+                    "SharePoint Excel:",
                     file
                 );
 
 
                 document.getElementById("fileStatus").innerHTML =
-                    "✅ 已成功連線 SharePoint";
+                    "✅ SharePoint Excel 連線成功";
 
 
                 document.getElementById("fileInfo").innerHTML =
-                    "<strong>找到 AR Excel！</strong><br><br>" +
-                    "檔案名稱：" +
+                    "<strong>找到 AR Excel！</strong>" +
+                    "<br><br>" +
+
+                    "檔案名稱：<strong>" +
                     file.name +
-                    "<br>" +
+                    "</strong><br>" +
+
                     "檔案大小：" +
                     (file.size / 1024 / 1024).toFixed(2) +
                     " MB<br>" +
+
                     "最後修改：" +
-                    new Date(file.lastModifiedDateTime).toLocaleString();
+                    new Date(
+                        file.lastModifiedDateTime
+                    ).toLocaleString() +
+                    "<br><br>" +
+
+                    "Drive Item ID：<br>" +
+                    "<code>" +
+                    file.id +
+                    "</code>";
 
             } catch (error) {
 
                 console.error(error);
 
                 document.getElementById("fileStatus").innerHTML =
-                    "❌ SharePoint 連線失敗";
+                    "❌ SharePoint Excel 連線失敗";
 
                 document.getElementById("fileInfo").textContent =
                     error.message;
@@ -281,52 +283,88 @@
     <style>
 
         body {
-            font-family: Arial, "Microsoft JhengHei", sans-serif;
+            font-family:
+                Arial,
+                "Microsoft JhengHei",
+                sans-serif;
+
             max-width: 1100px;
+
             margin: 40px auto;
+
             padding: 0 20px;
         }
 
+
         button {
+
             background: #0078d4;
+
             color: white;
+
             border: 0;
+
             padding: 12px 22px;
+
             font-size: 16px;
+
             border-radius: 5px;
+
             cursor: pointer;
         }
 
+
         button:disabled {
+
             background: #999;
+
             cursor: wait;
         }
 
+
         #status {
+
             margin-top: 20px;
+
             font-weight: bold;
         }
 
+
         #userInfo {
+
             margin-top: 10px;
         }
 
+
         #sharepointBox {
+
             margin-top: 30px;
+
             padding: 20px;
+
             border: 1px solid #ddd;
+
             border-radius: 8px;
+
             background: #f7f7f7;
         }
 
+
         #fileStatus {
+
             font-size: 18px;
+
             font-weight: bold;
         }
 
+
         #fileInfo {
+
             margin-top: 15px;
-            line-height: 1.6;
+
+            line-height: 1.7;
+
+            word-break: break-all;
         }
 
     </style>
